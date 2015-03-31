@@ -9,25 +9,29 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-
+//keeps the properties of every item no (default items set to be max)
 struct Trader
 {
-    int TraderNo;
-    int Quantity;
-    int Price;    
+    int TraderNo;	//Which traderno made a request for the item 
+    int Quantity;	//At which quantity
+    int Price;    	//At what price
 };
 
+//keeps the properties of trade of every Trader
 struct Trader2
 {
-    int SecondTrader;
-    int Quant;
-    int Cost;
-    int BuySell;    //Buy implies 0 else 1 if sell
+    int SecondTrader;	//Trader No. from whom buying/selling was done.
+    int Quant;		//How much quantity traded
+    int Cost;		//At what Cost Traded
+    int BuySell;    	//Buy implies 0 else 1 if sell
 };
 
-void dostuff(int sock);	//fcn prototype
+void dostuff(int sock);	//Actually does all the work
+
+//This function makes temporary files to write into. File I/O enables easier flow of synchronization among the items traded across traders
 void filew(struct Trader buy[10][20], struct Trader sell[10][20], struct Trader2 status[5][20]);
 
+//simple error message
 void error(const char *msg)
 {
     perror(msg);
@@ -45,12 +49,14 @@ int main(int argc, char *argv[])
          fprintf(stderr,"ERROR, no port provided\n");
          exit(1);
      }
+     
     //10 items each has properties as in struct; one for sell and for buy queue. Only 20 requests allowed per item no. (for simplicity)
     struct Trader buy[10][20];
     struct Trader sell[10][20];
     
     struct Trader2 status[5][20];
-	int i,j;    
+    int i,j;  
+    
     //initialization to keep which entries aren't yet filled
     for(i = 0 ; i < 10 ; i ++)
     {
@@ -65,7 +71,7 @@ int main(int argc, char *argv[])
         }
     }
    
-	filew(buy,sell,status);
+    filew(buy,sell,status);	//write the data into temporary files
 
  
 
@@ -73,23 +79,26 @@ int main(int argc, char *argv[])
      if (sockfd < 0) 
         error("ERROR opening socket");
         
+     
      bzero((char *) &serv_addr, sizeof(serv_addr));
      portno = atoi(argv[1]);
      serv_addr.sin_family = AF_INET;
      serv_addr.sin_addr.s_addr = INADDR_ANY;
      serv_addr.sin_port = htons(portno);
      
+     //binds the server struct to sock descriptor
      if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) 
               error("ERROR on binding");
-              
+             
      listen(sockfd,5);
      clilen = sizeof(cli_addr);
      
     
-	 while (1) 
+     while (1) 
      {
          newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
 		 fprintf(stdout,"New client\n");
+     
          if (newsockfd < 0) 
              error("ERROR on accept");
              
@@ -123,7 +132,7 @@ int funcr(int sock,int var)
     n = read(sock,&num,sizeof(num));
     if (n < 0) error("ERROR reading from socket");
     
-    
+    //doesn't work for price and quantity as of now (!!!)
     ack = -10;
     if(ntohl(num) < 1)
     {
@@ -131,7 +140,7 @@ int funcr(int sock,int var)
         ack = -30;
     }
 
-
+    //check if Trader login is out of constraint ( ! > 5 users)	
     if(var == 0)
     {
         if(ntohl(num) > 5)  //if out of constraints implies num = -1
@@ -141,6 +150,7 @@ int funcr(int sock,int var)
         }
     }
     
+    //check if Trading Items are out of constraint ( ! > 10 items)	
     else if(var == 1)
     {
         if(ntohl(num) > 10)  //if out of constraints implies num = -1
@@ -151,7 +161,7 @@ int funcr(int sock,int var)
     }
     
     int convack = htonl(ack);    //ack is int after converting to htonl
-    n = write(sock,&convack,sizeof(convack)); 
+    n = write(sock,&convack,sizeof(convack)); 	//write to socket
     if (n < 0) error("ERROR writing to socket");
     
     return htonl(num);
@@ -173,6 +183,7 @@ int funcw(int sockfd,int num)
         return 0;   //return true := return 0
 }
 
+//returns the minimum selling price of the input tradeitem amongst all request made for that item
 int MinSellPrice(struct Trader sell[10][20], int tradeitem)
 {
     int i;
@@ -196,6 +207,7 @@ int MinSellPrice(struct Trader sell[10][20], int tradeitem)
         return minindex;
 }
 
+//returns the maximum buyin price of the input tradeitem amongst all request made for that item.
 int MaxBuyPrice(struct Trader buy[10][20], int tradeitem)
 {
     int i;
@@ -219,11 +231,12 @@ int MaxBuyPrice(struct Trader buy[10][20], int tradeitem)
         return maxindex;
 }
 
+//prints data for server to look
 void printer(struct Trader buy[10][20], struct Trader sell[10][20], struct Trader2 status[5][20])
 {
 	int i,j;	
 
-	printf("Entity\tBuy Queue\tSell Queue\n");
+	printf("Buy Queue\t\t\tSell Queue\n");
 	for(i = 0 ; i < 10 ; i++)
 	{
 			for(j = 0 ; j < 20 ; j++)
@@ -247,7 +260,7 @@ void printer(struct Trader buy[10][20], struct Trader sell[10][20], struct Trade
 
 }
 
-
+//writes to the files
 void filew(struct Trader buy[10][20], struct Trader sell[10][20], struct Trader2 status[5][20])
 {
 	FILE *fp1 = fopen("trade1.txt","w");
@@ -277,7 +290,6 @@ void filew(struct Trader buy[10][20], struct Trader sell[10][20], struct Trader2
 	fclose(fp2);
 }
 
-//ADD ERROR HANDLING OF INEQUALITIES LIKE TRADE ITEM SHOULB BE [1,10]. CHECK AT SERVER AND NOT AT CLIENT.
 //There is a separate instance of this function for each connection. It handles all communication once a connnection has been established.
 void dostuff (int sock/*, struct Trader buy[10][20], struct Trader sell[10][20], struct Trader2 status[5][20]*/)
 {
@@ -306,7 +318,7 @@ void dostuff (int sock/*, struct Trader buy[10][20], struct Trader sell[10][20],
     
     struct Trader2 status[5][20];
 
-	int tradeitem, quantity, price;
+    int tradeitem, quantity, price;
     
     while(1)
     {
@@ -316,46 +328,42 @@ void dostuff (int sock/*, struct Trader buy[10][20], struct Trader sell[10][20],
             fprintf(stdout,"Trader No : %d chose the option : %d\n",traderno,choice);
         
 		//file read fcn
-		FILE *fp1 = fopen("trade1.txt","r");
-		FILE *fp2 = fopen("trade2.txt","r");
+	FILE *fp1 = fopen("trade1.txt","r");
+	FILE *fp2 = fopen("trade2.txt","r");
 	
-		for(i = 0 ; i < 10 ; i ++)
+	for(i = 0 ; i < 10 ; i ++)
+	{
+		for(j = 0 ; j < 20 ; j++)
 		{
-			for(j = 0 ; j < 20 ; j++)
-			{
-				int item,trnb,qb,pb,trns,qs,ps;
-				//Item ; Buy : {TraderNo ; Quantity ; Price} ; Sell : {TraderNo ; Quantity ; Price}
-				fscanf(fp1,"%d %d %d %d %d %d %d", &item, &trnb, &qb, &pb, &trns, &qs, &ps);
-				buy[i][j].TraderNo = trnb;
-				buy[i][j].Quantity = qb;
-				buy[i][j].Price = pb;
+			int item,trnb,qb,pb,trns,qs,ps;
+			//Item ; Buy : {TraderNo ; Quantity ; Price} ; Sell : {TraderNo ; Quantity ; Price}
+			fscanf(fp1,"%d %d %d %d %d %d %d", &item, &trnb, &qb, &pb, &trns, &qs, &ps);
+			buy[i][j].TraderNo = trnb;
+			buy[i][j].Quantity = qb;
+			buy[i][j].Price = pb;
 
-				sell[i][j].TraderNo = trns;
-				sell[i][j].Quantity = qs;
-				sell[i][j].Price = ps;
-			}
+			sell[i][j].TraderNo = trns;
+			sell[i][j].Quantity = qs;
+			sell[i][j].Price = ps;
 		}
+	}
 
-		for(i = 0 ; i < 5 ; i++)
+	for(i = 0 ; i < 5 ; i++)
+	{
+		for(j = 0 ; j < 20 ; j++)
 		{
-			for(j = 0 ; j < 20 ; j++)
-			{
-				int item,sec,q,c,bs;
-				//Trader : 2nd Trader : Quant : Price : Buy Sell
-				fscanf(fp2,"%d %d %d %d %d", &item, &sec, &q, &c, &bs);
-				status[i][j].SecondTrader = sec;
-				status[i][j].Quant = q;
-				status[i][j].Cost = c;
-				status[i][j].BuySell = bs;
-			}
+			int item,sec,q,c,bs;
+			//Trader : 2nd Trader : Quant : Price : Buy Sell
+			fscanf(fp2,"%d %d %d %d %d", &item, &sec, &q, &c, &bs);
+			status[i][j].SecondTrader = sec;
+			status[i][j].Quant = q;
+			status[i][j].Cost = c;
+			status[i][j].BuySell = bs;
 		}
+	}
 
-		fclose(fp1);
-		fclose(fp2);
-
-
-
-
+	fclose(fp1);
+	fclose(fp2);
 
         switch(choice)
         {
@@ -390,7 +398,7 @@ void dostuff (int sock/*, struct Trader buy[10][20], struct Trader sell[10][20],
                 {
                     index = MinSellPrice(sell, tradeitem-1); //returns the request no for min. price for the item no.  
 					
-					printer(buy,sell,status);
+	            printer(buy,sell,status);
 
                     if(index != -1 && sell[tradeitem-1][index].Price < price)   //if price in sell queue is less than request
                     {
@@ -420,9 +428,9 @@ void dostuff (int sock/*, struct Trader buy[10][20], struct Trader sell[10][20],
                             sell[tradeitem-1][index].TraderNo = 0;
                             sell[tradeitem-1][index].Quantity = 0;
                             sell[tradeitem-1][index].Price    = 9999999;
-                            	filew(buy,sell,status);
+                            filew(buy,sell,status);
 
-							printer(buy,sell,status);
+			    printer(buy,sell,status);
 
                             break;
                         }
@@ -443,11 +451,11 @@ void dostuff (int sock/*, struct Trader buy[10][20], struct Trader sell[10][20],
                             status[sectrader-1][i].Quant        = quantity;
                             status[sectrader-1][i].Cost         = sell[tradeitem-1][index].Price;
                             status[sectrader-1][i].BuySell      = 1; //sold
-                            	filew(buy,sell,status);
+                            filew(buy,sell,status);
+			    printer(buy,sell,status);
 
-							printer(buy,sell,status);
                             break;
-                            
+                
                         }
                         
                         else if(sell[tradeitem-1][index].Quantity < quantity)   //quantity of sell is lesser
@@ -458,9 +466,9 @@ void dostuff (int sock/*, struct Trader buy[10][20], struct Trader sell[10][20],
                             sell[tradeitem-1][index].TraderNo = 0;
                             sell[tradeitem-1][index].Quantity = 0;
                             sell[tradeitem-1][index].Price    = 9999999;
-                            	filew(buy,sell,status);
+                            filew(buy,sell,status);
 
-							printer(buy,sell,status);
+			    printer(buy,sell,status);
 							
                             continue;   //check again for other prices.
                         
@@ -481,7 +489,7 @@ void dostuff (int sock/*, struct Trader buy[10][20], struct Trader sell[10][20],
                         buy[tradeitem-1][i].Price    = price;
                        	filew(buy,sell,status);
 
-					printer(buy,sell,status);
+			printer(buy,sell,status);
                         break;
                     }
                 }                    
@@ -516,7 +524,7 @@ void dostuff (int sock/*, struct Trader buy[10][20], struct Trader sell[10][20],
                 while(1)
                 {
                     index = MaxBuyPrice(buy, tradeitem-1); //returns the request no for max. buy price for the item no.  
-                		printer(buy,sell,status);
+                    printer(buy,sell,status);
 
                     if(index != -1 && buy[tradeitem-1][index].Price > price)   //if price in buy queue is more than request
                     {
@@ -547,10 +555,10 @@ void dostuff (int sock/*, struct Trader buy[10][20], struct Trader sell[10][20],
                             buy[tradeitem-1][index].Quantity = 0;
                             buy[tradeitem-1][index].Price    = 0;
                             printf("traded\n");
-                    		filew(buy,sell,status);
+                    	    filew(buy,sell,status);
 
-							printer(buy,sell,status);
-        break;
+	     		    printer(buy,sell,status);
+                            break;
                         }
                         
                         else if(buy[tradeitem-1][index].Quantity > quantity)   //quantity of sell is greater
@@ -570,10 +578,10 @@ void dostuff (int sock/*, struct Trader buy[10][20], struct Trader sell[10][20],
                             status[sectrader-1][i].Cost         = buy[tradeitem-1][index].Price;
                             status[sectrader-1][i].BuySell      = 0; //bought
                             printf("quant 2\n");
-                        	filew(buy,sell,status);
+                            filew(buy,sell,status);
 
-							printer(buy,sell,status);
-    break;
+			    printer(buy,sell,status);
+			    break;
                             
                         }
                         
@@ -586,10 +594,10 @@ void dostuff (int sock/*, struct Trader buy[10][20], struct Trader sell[10][20],
                             buy[tradeitem-1][index].Quantity = 0;
                             buy[tradeitem-1][index].Price    = 0;
                             printf("quant 3\n");
-                           	filew(buy,sell,status);
+                            filew(buy,sell,status);
 
-							printer(buy,sell,status);
-continue;   //check again for other prices.
+			    printer(buy,sell,status);
+			    continue;   //check again for other prices.
                         
                         }
                     }     
@@ -609,8 +617,8 @@ continue;   //check again for other prices.
                         printf("appended\n");
                        	filew(buy,sell,status);
 
-						printer(buy,sell,status);
-break;
+			printer(buy,sell,status);
+			break;
                     }
                 }                    
                 break;
@@ -621,11 +629,11 @@ break;
                 {
                     index = MinSellPrice(sell, i); //returns the request no for min. sell price for the item no.
                     if(funcw(sock, sell[i][index].Price) == 0) ;
-					if(funcw(sock, sell[i][index].Quantity) == 0) ;
+			if(funcw(sock, sell[i][index].Quantity) == 0) ;
 
                     index = MaxBuyPrice(buy, i); //returns the request no for max. buy price for the item no.
                     if(funcw(sock, buy[i][index].Price) == 0) ;
-					if(funcw(sock, buy[i][index].Quantity) == 0) ;
+			if(funcw(sock, buy[i][index].Quantity) == 0) ;
                     
                 }
                 
@@ -637,7 +645,7 @@ break;
                     if(status[traderno-1][i].SecondTrader == 0) //No entries
                     {
                         if(funcw(sock, -10) == 0) ;       //-10 implies no entry
-                        break;
+                        	break;
                     }
                     
                     else
